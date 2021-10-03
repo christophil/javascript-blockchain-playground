@@ -1,17 +1,28 @@
 const SHA256 = require('crypto-js/sha256');
 
+class Transaction{
+    constructor(fromAddress, toAddress, amount, label = ''){
+        this.fromAddress = fromAddress;
+        this.toAddress = toAddress;
+        this.amount = amount;
+        this.timestamp = Date.now();
+        this.label = label;
+        this.hash = SHA256(this.fromAddress + this.toAddress + this.amount + this.timestamp + this.label).toString();
+    }
+}
+
 class Block{
-    constructor(index, timestamp, data, previousHash = ''){
+    constructor(index, timestamp, transaction, previousHash = ''){
         this.index = index;
         this.timestamp = timestamp;
-        this.data = data;
+        this.transaction = transaction;
         this.previousHash = previousHash;
         this.hash = this.calculateHash();
         this.nonce = 0;
     }
 
     calculateHash(){
-        return SHA256(this.index + this.previousHash + this.timestamp + JSON.stringify(this.data) + this.nonce).toString();
+        return SHA256(this.index + this.previousHash + this.timestamp + JSON.stringify(this.transaction) + this.nonce).toString();
     }
 
     mineBlock(difficulty){
@@ -19,8 +30,6 @@ class Block{
             this.nonce++;
             this.hash = this.calculateHash();
         }
-
-        console.log("Block mined: " + this.hash);
     }
 }
 
@@ -29,14 +38,59 @@ class Blockchain{
     constructor(){
         this.chain = [this.createGenesisBlock()];
         this.difficulty = 3;
+        this.miningReward = 50;
+        this.pendingTransactions = [];
+        this.defaultMiningRewardAddress = "0";
     }
 
     createGenesisBlock(){
-        return new Block(0, '10/03/2021', "Genesis block", "0");
+        return new Block(0, Date.now(), new Transaction("0", "0", 100000), "0");
     }
 
     getLastestBlock(){
         return this.chain[this.chain.length - 1];
+    }
+
+    minePendingTransaction(miningRewardAddress){
+
+        let pendingTransactionsHashList = [];
+
+        this.pendingTransactions.forEach((transaction) => {
+            pendingTransactionsHashList.push(transaction.hash);
+        });
+
+        console.log("Pending transactions list : ", pendingTransactionsHashList.join(','));
+
+        let transactionToMine = this.pendingTransactions.splice(0, 1)[0];
+
+        console.log("Transaction selected to mine : " + transactionToMine.hash);
+
+        let block = new Block(-1, Date.now(), transactionToMine);
+        this.addBlock(block);
+
+        let miningRewardBlock = new Block(-1, Date.now(), new Transaction(this.defaultMiningRewardAddress, miningRewardAddress, this.miningReward, "Mining reward"));
+        this.addBlock(miningRewardBlock);
+
+    }
+
+
+    createTransaction(transaction){
+        this.pendingTransactions.push(transaction);
+    }
+
+    getBalanceOfAddress(address){
+        let balance = 0;
+
+        for(const block of this.chain){
+           if(block.transaction.fromAddress === address){
+                balance -= block.transaction.amount;
+           }
+           else if(block.transaction.toAddress === address){
+                balance += block.transaction.amount;
+           }
+        }
+
+        console.log("Balance of '" + address +"'=" + balance);
     }
 
     addBlock(newBlock){
@@ -72,15 +126,18 @@ class Blockchain{
     }
 }
 
-let blockchain = new Blockchain();
+let coinChain = new Blockchain();
 
-console.log("Mining block 1...");
-blockchain.addBlock(new Block(1, '10/03/2021', {amount: 4}));
+coinChain.createTransaction(new Transaction('address1', 'address2', 100));
+coinChain.createTransaction(new Transaction('address2', 'address1', 20));
 
-console.log("Mining block 3...");
-blockchain.addBlock(new Block(1, '10/03/2021', {amount: 10}));
+coinChain.minePendingTransaction("minerAddress");
+coinChain.minePendingTransaction("minerAddress");
 
-blockchain.showBlockchain();
-blockchain.showIsBlockchainValid();
+coinChain.showBlockchain();
+coinChain.showIsBlockchainValid();
+coinChain.getBalanceOfAddress("minerAddress");
+coinChain.getBalanceOfAddress("address1");
+coinChain.getBalanceOfAddress("address2");
 
 
